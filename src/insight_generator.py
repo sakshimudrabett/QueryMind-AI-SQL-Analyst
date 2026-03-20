@@ -1,47 +1,56 @@
-def generate_insights(df, question):
+"""
+insight_generator.py
+Produces concise business insights from a query result using Groq LLaMA 3.
+"""
+
+import pandas as pd
+from groq import Groq
+
+
+SYSTEM_PROMPT = """You are a senior business analyst reviewing a data table.
+
+Given a table and the question that produced it, write 3–5 sharp, specific insights.
+
+Rules:
+- Reference actual numbers, names, or percentages from the data.
+- Each insight is exactly one standalone sentence on its own line.
+- No bullet points, no numbering, no headers.
+- Do not re-state the question or say "the data shows".
+- Focus on what's remarkable: outliers, growth, gaps, risks, opportunities.
+"""
+
+
+def generate_insights_with_groq(df: pd.DataFrame, question: str, api_key: str) -> str:
     """
-    Converts SQL query results into business insights.
-    Handles numeric values safely.
+    Generate business insights from a query result DataFrame.
+
+    Args:
+        df       : Query result (max 25 rows sent to LLM).
+        question : The original natural language question.
+        api_key  : Groq API key.
+
+    Returns:
+        A newline-separated string of insight sentences.
     """
+    client = Groq(api_key=api_key)
 
-    if df.empty:
-        return "No data available to generate insights."
+    # Keep prompt small: send at most 25 rows as a markdown table
+    table_md = df.head(25).to_markdown(index=False)
 
-    insights = []
+    prompt = (
+        f"Question: {question}\n\n"
+        f"Data:\n{table_md}\n\n"
+        f"Insights:"
+    )
 
-    # Identify dimension and metric columns
-    dimension = df.columns[0]
-    metric = df.columns[1]
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user",   "content": prompt},
+        ],
+        temperature=0.35,
+        max_tokens=512,
+    )
 
-    top_row = df.iloc[0]
-
-    # Safely convert metric to float
-    try:
-        metric_value = float(top_row[metric])
-    except ValueError:
-        metric_value = 0.0
-
-    # Revenue-related insights
-    if "revenue" in question.lower():
-        insights.append(
-            f"The highest contributor is '{top_row[dimension]}' with total revenue of {metric_value:,.0f}."
-        )
-
-        insights.append(
-            "This indicates a strong concentration of revenue in the top-performing segment."
-        )
-
-        insights.append(
-            "The business may consider strengthening underperforming segments to reduce dependency."
-        )
-
-    # Trend-related insights
-    if "month" in question.lower() or "trend" in question.lower():
-        insights.append(
-            "Revenue shows variation across months, indicating possible seasonality."
-        )
-        insights.append(
-            "Further analysis can help align inventory and marketing strategies."
-        )
-
-    return "\n".join(insights)
+    return response.choices[0].message.content.strip()

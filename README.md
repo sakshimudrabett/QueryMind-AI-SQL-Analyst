@@ -1,102 +1,166 @@
-# AI-Powered Data Analyst Assistant
+# ◈ QueryMind — AI SQL Analyst
 
-## 📌 Project Overview
-This project is an AI-inspired data analytics assistant that allows users to select common business questions and automatically generates SQL queries, executes them on a structured dataset, and produces business insights.
+> Upload any CSV · ask questions in plain English · get SQL, results & AI insights instantly.
 
-The goal of this project is to demonstrate how Generative AI concepts can be applied responsibly in a data analytics workflow, focusing on accuracy, interpretability, and business relevance.
 
----
+## What is QueryMind?
 
-## 🎯 Key Features
-- Converts business questions into SQL queries using an intent-based GenAI-style logic
-- Executes SQL queries on a structured sales dataset (SQLite)
-- Generates clear business insights and recommendations
-- Interactive Streamlit-based web interface
-- Designed with a pluggable LLM architecture (can integrate real LLM APIs)
+QueryMind is a natural language SQL analyst that lets anyone — technical or not — query their data just by asking a question in plain English.
+
+You upload a CSV, type something like *"Which category had the highest revenue last month?"* and the app generates the correct PostgreSQL query, runs it against your data, and returns results with AI-generated business insights.
+
+No SQL knowledge required.
 
 ---
 
-## 🧠 Supported Business Questions
-The system currently supports the following analytical questions:
+## Live Demo
 
-- Which region has the highest revenue?
-- Revenue by region
-- Show top 5 products by revenue
-- Revenue by customer segment
-- Revenue by product category
-- Show monthly revenue trend
-- Monthly sales performance
-
-The application intentionally uses guided questions to ensure accuracy and avoid ambiguity, similar to enterprise BI tools.
+> Deployed on Render — [querymind.onrender.com](https://querymind.onrender.com)
 
 ---
 
-## 🏗️ Project Architecture
-GenAI_Data_Analyst/
+## Features
+
+- **Natural language → SQL** using Groq LLaMA 3.3 (70B)
+- **Upload any CSV** — auto-cleans column names and loads into PostgreSQL
+- **Multiple datasets** — upload as many CSVs as you want, switch between them anytime
+- **Auto-generated question suggestions** based on your column names
+- **AI business insights** on every query result
+- **Query history** — revisit and re-run past questions
+- **Editable SQL** — tweak the generated query before running
+- **CSV export** — download any result table
+- **Schema explorer** in sidebar — browse all uploaded tables and columns
+- **Session stats** — tracks queries run and rows returned
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Frontend | Streamlit + custom CSS (Geist font, dark theme) |
+| AI / LLM | Groq API — LLaMA 3.3 70B |
+| Database | PostgreSQL via Supabase |
+| ORM / Driver | psycopg2 + SQLAlchemy |
+| Language | Python 3.11 |
+| Deployment | Render |
+
+---
+
+## Project Structure
+
+```
+QueryMind/
 │
-├── app.py
+├── app.py                    # Main Streamlit UI
+├── render.yaml               # Render deployment config
 ├── requirements.txt
-├── README.md
+├── .env.example              # Credential template
 ├── .gitignore
 │
-├── data/
-│ └── sales_data.csv
-│
 └── src/
-├── genai_sql.py
-├── sql_executor.py
-├── insight_generator.py
-└── load_data.py
-
+    ├── groq_sql.py           # NL → PostgreSQL via Groq LLaMA 3.3
+    ├── pg_executor.py        # Query runner + schema introspection + CSV uploader
+    ├── insight_generator.py  # AI business insights from query results
+    └── history.py            # JSON-based query history
+```
 
 ---
 
-## ⚙️ How to Run the Project
+## How It Works
 
-### 1️⃣ Clone the repository
+```
+User types a question in plain English
+            ↓
+Schema of the uploaded CSV is injected into the LLM prompt
+            ↓
+Groq LLaMA 3.3 generates a PostgreSQL query
+            ↓
+Query runs against PostgreSQL (Supabase)
+            ↓
+Results displayed as a table + AI insights generated
+```
+
+The schema is always injected into the prompt so the LLM never guesses column names — it works with your real data every time.
+
+---
+
+## Getting Started
+
+### 1. Clone the repo
+
 ```bash
-git clone <repository-url>
-cd GenAI_Data_Analyst
+git clone https://github.com/yourusername/QueryMind.git
+cd QueryMind
+```
 
-2️⃣ Install dependencies
+### 2. Install dependencies
+
+```bash
 pip install -r requirements.txt
+```
 
-3️⃣ Load data into SQLite
-python src/load_data.py
+### 3. Set up credentials
 
-4️⃣ Run the Streamlit application
+```bash
+cp .env.example .env
+```
+
+Edit `.env` with your keys:
+
+```env
+GROQ_API_KEY=gsk_your_groq_key_here
+DATABASE_URL=postgresql://user:password@host:5432/dbname
+```
+
+- Get a free Groq API key at [console.groq.com](https://console.groq.com)
+- Get a free PostgreSQL database at [supabase.com](https://supabase.com)
+
+### 4. Run the app
+
+```bash
 streamlit run app.py
+```
 
-📊 Dataset
+Open [http://localhost:8501](http://localhost:8501) in your browser.
 
-The project uses a sample sales dataset containing:
+---
 
-Order details
+## Deployment (Render)
 
-Customer segments
+1. Push this repo to GitHub
+2. Go to [render.com](https://render.com) → New Web Service → connect your repo
+3. Set build command: `pip install -r requirements.txt`
+4. Set start command: `streamlit run app.py --server.port $PORT --server.address 0.0.0.0 --server.headless true`
+5. Add environment variables: `GROQ_API_KEY` and `DATABASE_URL`
+6. Deploy
 
-Product categories
+---
 
-Regions
+## Security
 
-Revenue and quantity information
+- Only `SELECT` queries are allowed — a guard blocks `INSERT`, `UPDATE`, `DELETE`, `DROP`, `ALTER`, and all other DDL/DML before anything reaches the database
+- Credentials are read from environment variables only — never hardcoded or logged
+- API keys live in `.env` locally and in Render's secret environment variables in production
 
-The dataset is stored as a CSV file and loaded into SQLite for analysis.
+---
 
-🧠 GenAI Design Note
+## Example Questions
 
-During development, a deterministic intent-based logic is used to simulate GenAI behavior for converting natural language questions into SQL. This avoids API dependency while preserving a production-ready architecture that can integrate LLMs such as Hugging Face, Gemini, or OpenAI in future iterations.
+Once you upload a CSV, try asking:
 
-🚀 Future Enhancements
+```
+Which category has the highest total revenue?
+Show the top 10 rows sorted by sales descending
+What is the monthly trend over time?
+How many records are there per region?
+What is the average order value by customer segment?
+Show all orders where quantity is greater than 50
+```
 
-Integration with real LLM APIs for dynamic question handling
+---
 
-Additional analytical dimensions (profit, growth rate, forecasting)
+## Author
 
-Interactive visualizations and dashboards
+**Sakshi Mudrabett**
 
-User-defined custom filters
-
-👩‍💻 Author
-
-Sakshi Mudrabett
