@@ -1,13 +1,12 @@
 """
 pg_executor.py
 Connects to PostgreSQL, runs SELECT queries, and introspects schema.
-Uses psycopg2 with connection pooling via a simple cached connector.
+Automatically casts date and numeric columns on CSV upload.
 """
 
 import re
 import pandas as pd
 import psycopg2
-from psycopg2.extras import RealDictCursor
 from functools import lru_cache
 
 
@@ -60,7 +59,7 @@ def run_query(sql: str, database_url: str) -> pd.DataFrame:
         pandas DataFrame with query results.
 
     Raises:
-        ValueError  : If query contains forbidden DML/DDL keywords.
+        ValueError     : If query contains forbidden DML/DDL keywords.
         psycopg2.Error : On query execution failure.
     """
     sql_clean = sql.strip()
@@ -80,35 +79,64 @@ def run_query(sql: str, database_url: str) -> pd.DataFrame:
 
 
 # ──────────────────────────────────────────────
-# Schema introspection
+# CSV Upload with smart type detection
 # ──────────────────────────────────────────────
 
 def upload_dataframe(df: pd.DataFrame, table_name: str, database_url: str) -> None:
     """
     Upload a pandas DataFrame to PostgreSQL as a new table.
-    Replaces the table if it already exists.
-    Column names are auto-cleaned to be SQL-safe.
+    - Cleans column names to be SQL-safe
+    - Auto-detects and converts date columns to proper datetime type
+    - Auto-detects and converts numeric columns to proper numeric type
+    - Replaces the table if it already exists
 
     Args:
         df           : DataFrame to upload.
-        table_name   : Target table name (will be cleaned automatically).
+        table_name   : Target table name.
         database_url : PostgreSQL connection URL.
     """
-    import re
+    from sqlalchemy import create_engine
 
-    # Clean column names: lowercase, replace spaces/special chars with underscore
     df = df.copy()
+
+    # ── Clean column names ──────────────────────
     df.columns = [
         re.sub(r"[^a-z0-9_]", "_", re.sub(r"\s+", "_", str(c).lower())).strip("_")
         for c in df.columns
     ]
 
-    # Use SQLAlchemy engine for to_sql compatibility
-    from sqlalchemy import create_engine
+    # ── Auto-detect date columns ────────────────
+    date_hints = ["date", "time", "created", "updated", "day", "month", "year", "period", "week", "quarter"]
+    for col in df.columns:
+        if any(hint in col.lower() for hint in date_hints):
+            try:
+                converted = pd.to_datetime(df[col], infer_datetime_format=True, errors="coerce")
+                # Only apply if most values parsed successfully
+                if converted.notna().sum() > len(df) * 0.7:
+                    df[col] = converted
+            except Exception:
+                pass
+
+    # ── Auto-detect numeric columns ─────────────
+    for col in df.columns:
+        if df[col].dtype == object:
+            try:
+                converted = pd.to_numeric(df[col], errors="coerce")
+                # Only apply if most values parsed successfully
+                if converted.notna().sum() > len(df) * 0.8:
+                    df[col] = converted
+            except Exception:
+                pass
+
+    # ── Upload to PostgreSQL ────────────────────
     engine = create_engine(database_url)
     df.to_sql(table_name, engine, if_exists="replace", index=False)
     engine.dispose()
 
+
+# ──────────────────────────────────────────────
+# Schema introspection
+# ──────────────────────────────────────────────
 
 def get_schema(database_url: str, schema_name: str = "public") -> dict[str, list[tuple[str, str]]]:
     """
