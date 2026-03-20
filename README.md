@@ -15,7 +15,7 @@ No SQL knowledge required.
 
 ## Live Demo
 
-> Deployed on Render — [querymind.onrender.com](https://querymind.onrender.com)
+> Deployed on Render —  [ https://querymind-ai-sql-analyst.onrender.com/ ]
 
 ---
 
